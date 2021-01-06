@@ -1,4 +1,5 @@
 import path from "path";
+import fs from "fs";
 import warning from "warning";
 import nativeGlobAll from "glob-all";
 import promisify from "util.promisify";
@@ -42,10 +43,15 @@ async function applyAfterEmit(compiler, compilation, plugin) {
       it => !fileDepsMap[path.join(globOptions.cwd, it)]
     );
 
+    const unusedFileContents = unused.join('\n')
+    if (plugin.options.output) {
+      fs.writeFile(plugin.options.output, unusedFileContents)
+    }
+
     if (unused.length !== 0) {
       throw new Error(`
 UnusedFilesWebpackPlugin found some unused files:
-${unused.join(`\n`)}`);
+${unusedFileContents}`);
     }
   } catch (error) {
     if (plugin.options.failOnUnused && compilation.bail) {
@@ -71,7 +77,8 @@ See https://www.npmjs.com/package/glob-all#notes
     this.options = {
       ...options,
       patterns: options.patterns || options.pattern || [`**/*.*`],
-      failOnUnused: options.failOnUnused === true
+      failOnUnused: options.failOnUnused === true,
+      output: options.output
     };
 
     this.globOptions = {
@@ -81,9 +88,15 @@ See https://www.npmjs.com/package/glob-all#notes
   }
 
   apply(compiler) {
-    compiler.plugin(`after-emit`, (compilation, done) =>
-      applyAfterEmit(compiler, compilation, this).then(done, done)
-    );
+    if (compiler.hooks && compiler.hooks.afterEmit && compiler.hooks.afterEmit.tapPromise) {
+      compiler.hooks.afterEmit.tapPromise('unused-files-webpack-plugin', (compilation) => {
+        return applyAfterEmit(compiler, compilation, this);
+      });
+    } else {
+      compiler.plugin(`after-emit`, (compilation, done) =>
+        applyAfterEmit(compiler, compilation, this).then(done, done)
+      );
+    }
   }
 }
 
