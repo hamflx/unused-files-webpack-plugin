@@ -45,7 +45,7 @@ async function applyAfterEmit(compiler, compilation, plugin) {
 
     const unusedFileContents = unused.join('\n')
     if (plugin.options.output) {
-      fs.writeFile(plugin.options.output, unusedFileContents)
+      await fs.promises.writeFile(plugin.options.output, unusedFileContents)
     }
 
     if (unused.length !== 0) {
